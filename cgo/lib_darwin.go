@@ -4,34 +4,125 @@ package vec
 
 // #cgo CFLAGS: -DSQLITE_CORE -Wno-deprecated-declarations
 // #include "sqlite-vec.h"
+// #include <stdlib.h>
 //
 import "C"
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
+	"reflect"
+	"unsafe"
 )
 
-// Once called, every future new SQLite3 connection created in this process
-// will have the sqlite-vec extension loaded. It will persist until [Cancel] is
-// called.
+// Error represents a sqlite-vec extension error.
+type Error struct {
+	Code         int
+	ExtendedCode int
+	msg          string
+}
+
+func (e *Error) Error() string {
+	return fmt.Sprintf("sqlite-vec error %d: %s", e.Code, e.msg)
+}
+
+// LoadConnection loads the sqlite-vec extension into the provided SQLite connection.
+// This is the recommended way to load sqlite-vec on macOS and other platforms.
 //
-// Calls [sqlite3_auto_extension()] under the hood.
+// The db parameter should be an unsafe.Pointer to a sqlite3* connection handle.
+// Returns an error if the extension fails to load.
 //
-// Note: On macOS, sqlite3_auto_extension() is deprecated but still functional.
-// The deprecation warning is suppressed via compiler flags.
+// Example usage with mattn/go-sqlite3:
 //
-// [sqlite3_auto_extension()]: https://www.sqlite.org/c3ref/auto_extension.html
+//	import (
+//	    "database/sql"
+//	    sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
+//	    "github.com/mattn/go-sqlite3"
+//	)
+//
+//	sql.Register("sqlite3_with_vec", &sqlite3.SQLiteDriver{
+//	    ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+//	        return sqlite_vec.LoadConnectionGo(conn)
+//	    },
+//	})
+func LoadConnection(db unsafe.Pointer) error {
+	var errMsg *C.char
+	rc := C.sqlite3_vec_init((*C.sqlite3)(db), &errMsg, nil)
+	if rc != C.SQLITE_OK {
+		defer C.free(unsafe.Pointer(errMsg))
+		if errMsg != nil {
+			return &Error{
+				Code:         int(rc),
+				ExtendedCode: int(rc),
+				msg:          C.GoString(errMsg),
+			}
+		}
+		return &Error{
+			Code:         int(rc),
+			ExtendedCode: int(rc),
+			msg:          "failed to load sqlite-vec extension",
+		}
+	}
+	return nil
+}
+
+// LoadConnectionGo loads the sqlite-vec extension into a mattn/go-sqlite3 connection.
+// This function extracts the underlying sqlite3* pointer using reflection.
+//
+// Example usage:
+//
+//	sql.Register("sqlite3_with_vec", &sqlite3.SQLiteDriver{
+//	    ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+//	        return sqlite_vec.LoadConnectionGo(conn)
+//	    },
+//	})
+func LoadConnectionGo(conn interface{}) error {
+	// Use reflection to access the unexported 'db' field in SQLiteConn
+	v := reflect.ValueOf(conn)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	dbField := v.FieldByName("db")
+	if !dbField.IsValid() {
+		return &Error{
+			Code:         1,
+			ExtendedCode: 1,
+			msg:          "invalid connection: could not find db field",
+		}
+	}
+
+	// Extract the pointer using unsafe to access unexported field
+	dbPtr := unsafe.Pointer(dbField.UnsafeAddr())
+	sqliteDB := *(**C.sqlite3)(dbPtr)
+
+	if sqliteDB == nil {
+		return &Error{
+			Code:         1,
+			ExtendedCode: 1,
+			msg:          "invalid connection: db pointer is nil",
+		}
+	}
+
+	return LoadConnection(unsafe.Pointer(sqliteDB))
+}
+
+// Deprecated: Use [LoadConnection] or [LoadConnectionGo] instead.
+//
+// Auto enables process-global auto-extension loading. This function uses
+// sqlite3_auto_extension() which is deprecated on macOS and may not work
+// on future Apple platforms.
+//
+// Prefer loading the extension per-connection using LoadConnection or
+// LoadConnectionGo with a ConnectHook instead.
 func Auto() {
 	C.sqlite3_auto_extension((*[0]byte)((C.sqlite3_vec_init)))
 }
 
-// "Cancels" any previous calls to [Auto]. Any new SQLite3 connections created
-// will not have the sqlite-vec extension loaded.
+// Deprecated: Use per-connection loading instead.
 //
-// Calls sqlite3_cancel_auto_extension() under the hood.
-//
-// Note: On macOS, sqlite3_cancel_auto_extension() is deprecated but still functional.
-// The deprecation warning is suppressed via compiler flags.
+// Cancel disables process-global auto-extension loading. This function uses
+// sqlite3_cancel_auto_extension() which is deprecated on macOS.
 func Cancel() {
 	C.sqlite3_cancel_auto_extension((*[0]byte)(C.sqlite3_vec_init))
 }

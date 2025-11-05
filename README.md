@@ -12,7 +12,56 @@ go get -u github.com/asg017/sqlite-vec-go-bindings
 
 ## CGO Bindings
 
-For most SQLite Go libraries that use CGO, like [`mattn/go-sqlite3`](https://github.com/mattn/go-sqlite3), use the CGO portion of this Go module. It will compile the `sqlite-vec` libary from source and embed into your application.
+For most SQLite Go libraries that use CGO, like [`mattn/go-sqlite3`](https://github.com/mattn/go-sqlite3), use the CGO portion of this Go module. It will compile the `sqlite-vec` library from source and embed into your application.
+
+### Recommended: Per-Connection Loading (New API)
+
+The recommended approach is to load `sqlite-vec` per-connection using `ConnectHook`. This approach works on all platforms, including macOS where process-global extensions are deprecated:
+
+```go
+package main
+
+import (
+	"database/sql"
+	"log"
+
+	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
+	"github.com/mattn/go-sqlite3"
+)
+
+func main() {
+	// Register a custom driver with sqlite-vec loaded per-connection
+	sql.Register("sqlite3_with_vec", &sqlite3.SQLiteDriver{
+		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+			return sqlite_vec.LoadConnectionGo(conn)
+		},
+	})
+
+	db, err := sql.Open("sqlite3_with_vec", ":memory:")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	var sqliteVersion string
+	var vecVersion string
+	err = db.QueryRow("select sqlite_version(), vec_version()").Scan(&sqliteVersion, &vecVersion)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("sqlite_version=%s, vec_version=%s\n", sqliteVersion, vecVersion)
+}
+```
+
+This approach:
+- ✅ Works on macOS without deprecation warnings
+- ✅ Provides better control over which connections have the extension loaded
+- ✅ Is thread-safe and works with connection pools
+- ✅ Future-proof against Apple platform changes
+
+### Legacy: Process-Global Loading (Deprecated)
+
+The original `Auto()` function is still available for backward compatibility, but is deprecated on macOS:
 
 ```go
 package main
@@ -25,10 +74,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-import "C"
-
 func main() {
-	sqlite_vec.Auto()
+	sqlite_vec.Auto() // Deprecated: use LoadConnectionGo with ConnectHook instead
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		log.Fatal(err)
@@ -45,7 +92,9 @@ func main() {
 }
 ```
 
-Use [`sqlite_vec.Auto()`](#TODO) before opening a connection to automatically register `sqlite-vec` functions. See [`simple-go-cgo/demo.go`](#TODO) for a larger example.
+**Note:** `Auto()` uses `sqlite3_auto_extension()` which is deprecated on Apple platforms since macOS 10.10. Consider migrating to the per-connection approach.
+
+### Compatibility
 
 While this works with CGO SQLite/Go libraries like `mattn/go-sqlite3`, this will NOT work with other non-CGO library like [`modernc.org/sqlite`](https://pkg.go.dev/modernc.org/sqlite) or [ncruces/go-sqlite3](https://github.com/ncruces/go-sqlite3).
 
