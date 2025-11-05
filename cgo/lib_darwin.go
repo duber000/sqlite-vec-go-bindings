@@ -1,7 +1,8 @@
+//go:build darwin
+
 package vec
 
-// #cgo CFLAGS: -DSQLITE_CORE
-// #cgo linux LDFLAGS: -lm
+// #cgo CFLAGS: -DSQLITE_CORE -Wno-deprecated-declarations
 // #include "sqlite-vec.h"
 //
 import "C"
@@ -16,17 +17,23 @@ import (
 //
 // Calls [sqlite3_auto_extension()] under the hood.
 //
+// Note: On macOS, sqlite3_auto_extension() is deprecated but still functional.
+// The deprecation warning is suppressed via compiler flags.
+//
 // [sqlite3_auto_extension()]: https://www.sqlite.org/c3ref/auto_extension.html
 func Auto() {
-	C.sqlite3_auto_extension( (*[0]byte) ((C.sqlite3_vec_init)) );
+	C.sqlite3_auto_extension((*[0]byte)((C.sqlite3_vec_init)))
 }
 
 // "Cancels" any previous calls to [Auto]. Any new SQLite3 connections created
 // will not have the sqlite-vec extension loaded.
 //
 // Calls sqlite3_cancel_auto_extension() under the hood.
+//
+// Note: On macOS, sqlite3_cancel_auto_extension() is deprecated but still functional.
+// The deprecation warning is suppressed via compiler flags.
 func Cancel() {
-	C.sqlite3_cancel_auto_extension( (*[0]byte) (C.sqlite3_vec_init) );
+	C.sqlite3_cancel_auto_extension((*[0]byte)(C.sqlite3_vec_init))
 }
 
 // Serializes a float32 list into a vector BLOB that sqlite-vec accepts.
@@ -38,4 +45,3 @@ func SerializeFloat32(vector []float32) ([]byte, error) {
 	}
 	return buf.Bytes(), nil
 }
-
