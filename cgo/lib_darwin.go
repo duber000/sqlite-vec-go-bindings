@@ -2,7 +2,7 @@
 
 package vec
 
-// #cgo CFLAGS: -DSQLITE_CORE -Wno-deprecated-declarations
+// #cgo CFLAGS: -DSQLITE_CORE
 // #include "sqlite-vec.h"
 // #include <stdlib.h>
 //
@@ -105,26 +105,6 @@ func LoadConnectionGo(conn interface{}) error {
 	}
 
 	return LoadConnection(unsafe.Pointer(sqliteDB))
-}
-
-// Deprecated: Use [LoadConnection] or [LoadConnectionGo] instead.
-//
-// Auto enables process-global auto-extension loading. This function uses
-// sqlite3_auto_extension() which is deprecated on macOS and may not work
-// on future Apple platforms.
-//
-// Prefer loading the extension per-connection using LoadConnection or
-// LoadConnectionGo with a ConnectHook instead.
-func Auto() {
-	C.sqlite3_auto_extension((*[0]byte)((C.sqlite3_vec_init)))
-}
-
-// Deprecated: Use per-connection loading instead.
-//
-// Cancel disables process-global auto-extension loading. This function uses
-// sqlite3_cancel_auto_extension() which is deprecated on macOS.
-func Cancel() {
-	C.sqlite3_cancel_auto_extension((*[0]byte)(C.sqlite3_vec_init))
 }
 
 // Serializes a float32 list into a vector BLOB that sqlite-vec accepts.

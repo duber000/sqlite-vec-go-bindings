@@ -14,9 +14,7 @@ go get -u github.com/asg017/sqlite-vec-go-bindings
 
 For most SQLite Go libraries that use CGO, like [`mattn/go-sqlite3`](https://github.com/mattn/go-sqlite3), use the CGO portion of this Go module. It will compile the `sqlite-vec` library from source and embed into your application.
 
-### Recommended: Per-Connection Loading (New API)
-
-The recommended approach is to load `sqlite-vec` per-connection using `ConnectHook`. This approach works on all platforms, including macOS where process-global extensions are deprecated:
+Use the per-connection loading approach with `ConnectHook` to load `sqlite-vec` into each database connection:
 
 ```go
 package main
@@ -53,46 +51,11 @@ func main() {
 }
 ```
 
-This approach:
-- ✅ Works on macOS without deprecation warnings
-- ✅ Provides better control over which connections have the extension loaded
-- ✅ Is thread-safe and works with connection pools
-- ✅ Future-proof against Apple platform changes
-
-### Legacy: Process-Global Loading (Deprecated)
-
-The original `Auto()` function is still available for backward compatibility, but is deprecated on macOS:
-
-```go
-package main
-
-import (
-	"database/sql"
-	"log"
-
-	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
-	_ "github.com/mattn/go-sqlite3"
-)
-
-func main() {
-	sqlite_vec.Auto() // Deprecated: use LoadConnectionGo with ConnectHook instead
-	db, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
-
-	var sqliteVersion string
-	var vecVersion string
-	err = db.QueryRow("select sqlite_version(), vec_version()").Scan(&sqliteVersion, &vecVersion)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("sqlite_version=%s, vec_version=%s\n", sqliteVersion, vecVersion)
-}
-```
-
-**Note:** `Auto()` uses `sqlite3_auto_extension()` which is deprecated on Apple platforms since macOS 10.10. Consider migrating to the per-connection approach.
+**Benefits:**
+- ✅ Works on all platforms including macOS
+- ✅ Thread-safe and works correctly with connection pools
+- ✅ Explicit control over which connections have the extension loaded
+- ✅ Proper error handling
 
 ### Compatibility
 

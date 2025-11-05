@@ -108,25 +108,6 @@ func LoadConnectionGo(conn interface{}) error {
 	return LoadConnection(unsafe.Pointer(sqliteDB))
 }
 
-// Deprecated: Use [LoadConnection] or [LoadConnectionGo] instead.
-//
-// Auto enables process-global auto-extension loading. While this works on
-// non-Apple platforms, per-connection loading is recommended for better
-// control and compatibility.
-//
-// Prefer loading the extension per-connection using LoadConnection or
-// LoadConnectionGo with a ConnectHook instead.
-func Auto() {
-	C.sqlite3_auto_extension((*[0]byte)((C.sqlite3_vec_init)))
-}
-
-// Deprecated: Use per-connection loading instead.
-//
-// Cancel disables process-global auto-extension loading.
-func Cancel() {
-	C.sqlite3_cancel_auto_extension((*[0]byte)(C.sqlite3_vec_init))
-}
-
 // Serializes a float32 list into a vector BLOB that sqlite-vec accepts.
 func SerializeFloat32(vector []float32) ([]byte, error) {
 	buf := new(bytes.Buffer)
